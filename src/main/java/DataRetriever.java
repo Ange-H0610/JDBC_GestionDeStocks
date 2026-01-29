@@ -166,3 +166,111 @@ public class DataRetriever {
         return ingredient;
     }
 }
+
+public Order saveOrder(Order orderToSave) {
+    String sql;
+    boolean isNewOrder = (orderToSave.getId() == null);
+    
+    if (isNewOrder) {
+       
+        sql = """
+            INSERT INTO "order" (reference, creation_datetime, order_type, order_status) 
+            VALUES (?, ?, ?, ?) 
+            RETURNING id
+            """;
+    } else {
+       
+        Order existingOrder = findOrderById(orderToSave.getId());
+        if (existingOrder != null && existingOrder.getOrderStatus() == OrderStatus.DELIVERED) {
+         
+            throw new OrderDeliveredException(
+                "Impossible de modifier une commande déjà livrée. Référence: " + 
+                existingOrder.getReference()
+            );
+        }
+        
+        sql = """
+            UPDATE "order" 
+            SET reference = ?, creation_datetime = ?, order_type = ?, order_status = ? 
+            WHERE id = ? 
+            RETURNING id
+            """;
+    }
+
+    try (Connection conn = DBConnection.getConnection();
+         PreparedStatement ps = conn.prepareStatement(sql)) {
+
+        ps.setString(1, orderToSave.getReference());
+        ps.setTimestamp(2, Timestamp.from(orderToSave.getCreationDatetime()));
+        ps.setString(3, orderToSave.getOrderType().name());
+        ps.setString(4, orderToSave.getOrderStatus().name());
+        
+        if (!isNewOrder) {
+            ps.setInt(5, orderToSave.getId());
+        }
+
+        ResultSet rs = ps.executeQuery();
+        
+        if (rs.next()) {
+            orderToSave.setId(rs.getInt("id"));
+        }
+        
+        conn.commit();
+        
+    } catch (SQLException e) {
+        e.printStackTrace();
+        throw new RuntimeException("Erreur lors de la sauvegarde de la commande", e);
+    }
+
+    return orderToSave;
+}
+
+
+private Order findOrderById(int id) {
+    Order order = null;
+    String sql = """
+            SELECT id, reference, creation_datetime, order_type, order_status 
+            FROM "order" 
+            WHERE id = ?
+            """;
+
+    try (Connection conn = DBConnection.getConnection();
+         PreparedStatement ps = conn.prepareStatement(sql)) {
+
+        ps.setInt(1, id);
+        ResultSet rs = ps.executeQuery();
+
+        if (rs.next()) {
+            order = new Order();
+            order.setId(rs.getInt("id"));
+            order.setReference(rs.getString("reference"));
+            order.setCreationDatetime(rs.getTimestamp("creation_datetime").toInstant());
+            
+            String orderTypeStr = rs.getString("order_type");
+            if (orderTypeStr != null) {
+                order.setOrderType(OrderType.valueOf(orderTypeStr));
+            }
+            
+            String orderStatusStr = rs.getString("order_status");
+            if (orderStatusStr != null) {
+                order.setOrderStatus(OrderStatus.valueOf(orderStatusStr));
+            }
+        }
+
+    } catch (SQLException e) {
+        e.printStackTrace();
+    }
+
+    return order;
+}
+
+
+public Ingredient saveIngredient(Ingredient ingredientToSave) {
+   
+    throw new RuntimeException("Not implemented yet");
+}
+
+public Dish saveDish(Dish dishToSave) {
+   
+    throw new RuntimeException("Not implemented yet");
+}
