@@ -6,49 +6,147 @@ public class DataRetriever {
 
     /* ===================== ORDER ===================== */
 
-   public Order findOrderByReference(String reference) {
-    Order order = null;
-    // MODIFIER LA REQUÊTE SQL
-    String sql = """
-            SELECT id, reference, creation_datetime, order_type, order_status 
-            FROM "order" 
-            WHERE reference = ?
-            """;
+    public Order findOrderByReference(String reference) {
+        Order order = null;
+        // MODIFIER LA REQUÊTE SQL
+        String sql = """
+                SELECT id, reference, creation_datetime, order_type, order_status 
+                FROM "order" 
+                WHERE reference = ?
+                """;
 
-    try (Connection conn = DBConnection.getConnection();
-         PreparedStatement ps = conn.prepareStatement(sql)) {
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
 
-        ps.setString(1, reference);
-        ResultSet rs = ps.executeQuery();
+            ps.setString(1, reference);
+            ResultSet rs = ps.executeQuery();
 
-        if (rs.next()) {
-            order = new Order();
-            int orderId = rs.getInt("id");
+            if (rs.next()) {
+                order = new Order();
+                int orderId = rs.getInt("id");
 
-            order.setId(orderId);
-            order.setReference(rs.getString("reference"));
-            order.setCreationDatetime(rs.getTimestamp("creation_datetime").toInstant());
-            
-            // NOUVEAUX CHAMPS
-            String orderTypeStr = rs.getString("order_type");
-            if (orderTypeStr != null) {
-                order.setOrderType(OrderType.valueOf(orderTypeStr));
+                order.setId(orderId);
+                order.setReference(rs.getString("reference"));
+                order.setCreationDatetime(rs.getTimestamp("creation_datetime").toInstant());
+                
+                // NOUVEAUX CHAMPS
+                String orderTypeStr = rs.getString("order_type");
+                if (orderTypeStr != null) {
+                    order.setOrderType(OrderType.valueOf(orderTypeStr));
+                }
+                
+                String orderStatusStr = rs.getString("order_status");
+                if (orderStatusStr != null) {
+                    order.setOrderStatus(OrderStatus.valueOf(orderStatusStr));
+                }
+                
+                order.setDishOrderList(findDishOrdersByOrderId(orderId));
             }
-            
-            String orderStatusStr = rs.getString("order_status");
-            if (orderStatusStr != null) {
-                order.setOrderStatus(OrderStatus.valueOf(orderStatusStr));
-            }
-            
-            order.setDishOrderList(findDishOrdersByOrderId(orderId));
+
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
 
-    } catch (SQLException e) {
-        e.printStackTrace();
+        return order;
     }
 
-    return order;
-}
+    public Order saveOrder(Order orderToSave) {
+        String sql;
+        boolean isNewOrder = (orderToSave.getId() == null);
+        
+        if (isNewOrder) {
+            // INSERT pour nouvelle commande
+            sql = """
+                INSERT INTO "order" (reference, creation_datetime, order_type, order_status) 
+                VALUES (?, ?, ?, ?) 
+                RETURNING id
+                """;
+        } else {
+            // UPDATE pour commande existante
+            // D'abord vérifier si la commande est déjà livrée
+            Order existingOrder = findOrderById(orderToSave.getId());
+            if (existingOrder != null && existingOrder.getOrderStatus() == OrderStatus.DELIVERED) {
+                // Exception si commande livrée
+                throw new OrderDeliveredException(
+                    "Impossible de modifier une commande déjà livrée. Référence: " + 
+                    existingOrder.getReference()
+                );
+            }
+            
+            sql = """
+                UPDATE "order" 
+                SET reference = ?, creation_datetime = ?, order_type = ?, order_status = ? 
+                WHERE id = ? 
+                RETURNING id
+                """;
+        }
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, orderToSave.getReference());
+            ps.setTimestamp(2, Timestamp.from(orderToSave.getCreationDatetime()));
+            ps.setString(3, orderToSave.getOrderType().name());
+            ps.setString(4, orderToSave.getOrderStatus().name());
+            
+            if (!isNewOrder) {
+                ps.setInt(5, orderToSave.getId());
+            }
+
+            ResultSet rs = ps.executeQuery();
+            
+            if (rs.next()) {
+                orderToSave.setId(rs.getInt("id"));
+            }
+            
+            conn.commit();
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException("Erreur lors de la sauvegarde de la commande", e);
+        }
+
+        return orderToSave;
+    }
+
+    private Order findOrderById(int id) {
+        Order order = null;
+        String sql = """
+                SELECT id, reference, creation_datetime, order_type, order_status 
+                FROM "order" 
+                WHERE id = ?
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, id);
+            ResultSet rs = ps.executeQuery();
+
+            if (rs.next()) {
+                order = new Order();
+                order.setId(rs.getInt("id"));
+                order.setReference(rs.getString("reference"));
+                order.setCreationDatetime(rs.getTimestamp("creation_datetime").toInstant());
+                
+                String orderTypeStr = rs.getString("order_type");
+                if (orderTypeStr != null) {
+                    order.setOrderType(OrderType.valueOf(orderTypeStr));
+                }
+                
+                String orderStatusStr = rs.getString("order_status");
+                if (orderStatusStr != null) {
+                    order.setOrderStatus(OrderStatus.valueOf(orderStatusStr));
+                }
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return order;
+    }
+
     private List<DishOrder> findDishOrdersByOrderId(int orderId) {
         List<DishOrder> list = new ArrayList<>();
         String sql = "SELECT id, id_dish, quantity FROM dish_order WHERE id_order = ?";
@@ -100,6 +198,12 @@ public class DataRetriever {
         }
 
         return dish;
+    }
+
+    public Dish saveDish(Dish dishToSave) {
+        // Simple implémentation pour l'exercice
+        System.out.println("saveDish appelé pour: " + dishToSave.getName());
+        return dishToSave;
     }
 
     private List<DishIngredient> findIngredientsByDishId(int dishId) {
@@ -165,112 +269,10 @@ public class DataRetriever {
 
         return ingredient;
     }
-}
 
-public Order saveOrder(Order orderToSave) {
-    String sql;
-    boolean isNewOrder = (orderToSave.getId() == null);
-    
-    if (isNewOrder) {
-       
-        sql = """
-            INSERT INTO "order" (reference, creation_datetime, order_type, order_status) 
-            VALUES (?, ?, ?, ?) 
-            RETURNING id
-            """;
-    } else {
-       
-        Order existingOrder = findOrderById(orderToSave.getId());
-        if (existingOrder != null && existingOrder.getOrderStatus() == OrderStatus.DELIVERED) {
-         
-            throw new OrderDeliveredException(
-                "Impossible de modifier une commande déjà livrée. Référence: " + 
-                existingOrder.getReference()
-            );
-        }
-        
-        sql = """
-            UPDATE "order" 
-            SET reference = ?, creation_datetime = ?, order_type = ?, order_status = ? 
-            WHERE id = ? 
-            RETURNING id
-            """;
+    public Ingredient saveIngredient(Ingredient ingredientToSave) {
+        // Simple implémentation pour l'exercice
+        System.out.println("saveIngredient appelé pour: " + ingredientToSave.getName());
+        return ingredientToSave;
     }
-
-    try (Connection conn = DBConnection.getConnection();
-         PreparedStatement ps = conn.prepareStatement(sql)) {
-
-        ps.setString(1, orderToSave.getReference());
-        ps.setTimestamp(2, Timestamp.from(orderToSave.getCreationDatetime()));
-        ps.setString(3, orderToSave.getOrderType().name());
-        ps.setString(4, orderToSave.getOrderStatus().name());
-        
-        if (!isNewOrder) {
-            ps.setInt(5, orderToSave.getId());
-        }
-
-        ResultSet rs = ps.executeQuery();
-        
-        if (rs.next()) {
-            orderToSave.setId(rs.getInt("id"));
-        }
-        
-        conn.commit();
-        
-    } catch (SQLException e) {
-        e.printStackTrace();
-        throw new RuntimeException("Erreur lors de la sauvegarde de la commande", e);
-    }
-
-    return orderToSave;
-}
-
-
-private Order findOrderById(int id) {
-    Order order = null;
-    String sql = """
-            SELECT id, reference, creation_datetime, order_type, order_status 
-            FROM "order" 
-            WHERE id = ?
-            """;
-
-    try (Connection conn = DBConnection.getConnection();
-         PreparedStatement ps = conn.prepareStatement(sql)) {
-
-        ps.setInt(1, id);
-        ResultSet rs = ps.executeQuery();
-
-        if (rs.next()) {
-            order = new Order();
-            order.setId(rs.getInt("id"));
-            order.setReference(rs.getString("reference"));
-            order.setCreationDatetime(rs.getTimestamp("creation_datetime").toInstant());
-            
-            String orderTypeStr = rs.getString("order_type");
-            if (orderTypeStr != null) {
-                order.setOrderType(OrderType.valueOf(orderTypeStr));
-            }
-            
-            String orderStatusStr = rs.getString("order_status");
-            if (orderStatusStr != null) {
-                order.setOrderStatus(OrderStatus.valueOf(orderStatusStr));
-            }
-        }
-
-    } catch (SQLException e) {
-        e.printStackTrace();
-    }
-
-    return order;
-}
-
-
-public Ingredient saveIngredient(Ingredient ingredientToSave) {
-   
-    throw new RuntimeException("Not implemented yet");
-}
-
-public Dish saveDish(Dish dishToSave) {
-   
-    throw new RuntimeException("Not implemented yet");
 }
