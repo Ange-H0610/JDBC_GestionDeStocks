@@ -75,6 +75,10 @@ ALTER TABLE "order"
 ADD COLUMN order_type VARCHAR(20),
 ADD COLUMN order_status VARCHAR(20);
 
+UPDATE "order" 
+SET order_type = 'TAKE_AWAY', 
+    order_status = 'CREATED' 
+WHERE order_type IS NULL OR order_status IS NULL;
 create table if not exists dish_order
 (
     id       serial primary key,
