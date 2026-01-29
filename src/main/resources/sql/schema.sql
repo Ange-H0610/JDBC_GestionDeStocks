@@ -70,6 +70,11 @@ create table if not exists "order"
     creation_datetime timestamp without time zone
 );
 
+
+ALTER TABLE "order" 
+ADD COLUMN order_type VARCHAR(20),
+ADD COLUMN order_status VARCHAR(20);
+
 create table if not exists dish_order
 (
     id       serial primary key,
