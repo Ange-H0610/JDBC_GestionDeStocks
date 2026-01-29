@@ -66,13 +66,15 @@ public class Order {
         this.orderStatus = orderStatus;
     }
 
-    
+
     @Override
     public String toString() {
         return "Order{" +
                 "id=" + id +
                 ", reference='" + reference + '\'' +
                 ", creationDatetime=" + creationDatetime +
+                 ", orderType=" + orderType +
+                ", orderStatus=" + orderStatus +
                 ", dishOrderList=" + dishOrderList +
                 '}';
     }
