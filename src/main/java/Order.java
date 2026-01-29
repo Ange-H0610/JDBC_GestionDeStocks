@@ -8,6 +8,16 @@ public class Order {
     private Instant creationDatetime;
     private List<DishOrder> dishOrderList;
 
+
+        private OrderType orderType;
+    private OrderStatus orderStatus;
+    
+    public Order() {
+        this.creationDatetime = Instant.now();
+        this.orderStatus = OrderStatus.CREATED; // Valeur par défaut
+    }
+
+
     public Integer getId() {
         return id;
     }
@@ -40,6 +50,23 @@ public class Order {
         this.dishOrderList = dishOrderList;
     }
 
+     public OrderType getOrderType() {
+        return orderType;
+    }
+    
+    public void setOrderType(OrderType orderType) {
+        this.orderType = orderType;
+    }
+    
+    public OrderStatus getOrderStatus() {
+        return orderStatus;
+    }
+    
+    public void setOrderStatus(OrderStatus orderStatus) {
+        this.orderStatus = orderStatus;
+    }
+
+    
     @Override
     public String toString() {
         return "Order{" +
