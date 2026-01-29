@@ -91,7 +91,13 @@ public class Order {
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof Order order)) return false;
-        return Objects.equals(id, order.id) && Objects.equals(reference, order.reference) && Objects.equals(creationDatetime, order.creationDatetime) && Objects.equals(dishOrderList, order.dishOrderList);
+        return Objects.equals(id, order.id) && 
+               Objects.equals(reference, order.reference) && 
+               Objects.equals(creationDatetime, order.creationDatetime) && 
+               Objects.equals(orderType, order.orderType) &&
+               Objects.equals(orderStatus, order.orderStatus) &&
+               Objects.equals(dishOrderList, order.dishOrderList);
+
     }
 
     @Override
