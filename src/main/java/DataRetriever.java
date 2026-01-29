@@ -6,33 +6,49 @@ public class DataRetriever {
 
     /* ===================== ORDER ===================== */
 
-    public Order findOrderByReference(String reference) {
-        Order order = null;
-        String sql = "SELECT id, reference, creation_datetime FROM \"order\" WHERE reference = ?";
+   public Order findOrderByReference(String reference) {
+    Order order = null;
+    // MODIFIER LA REQUÊTE SQL
+    String sql = """
+            SELECT id, reference, creation_datetime, order_type, order_status 
+            FROM "order" 
+            WHERE reference = ?
+            """;
 
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+    try (Connection conn = DBConnection.getConnection();
+         PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setString(1, reference);
-            ResultSet rs = ps.executeQuery();
+        ps.setString(1, reference);
+        ResultSet rs = ps.executeQuery();
 
-            if (rs.next()) {
-                order = new Order();
-                int orderId = rs.getInt("id");
+        if (rs.next()) {
+            order = new Order();
+            int orderId = rs.getInt("id");
 
-                order.setId(orderId);
-                order.setReference(rs.getString("reference"));
-                order.setCreationDatetime(rs.getTimestamp("creation_datetime").toInstant());
-                order.setDishOrderList(findDishOrdersByOrderId(orderId));
+            order.setId(orderId);
+            order.setReference(rs.getString("reference"));
+            order.setCreationDatetime(rs.getTimestamp("creation_datetime").toInstant());
+            
+            // NOUVEAUX CHAMPS
+            String orderTypeStr = rs.getString("order_type");
+            if (orderTypeStr != null) {
+                order.setOrderType(OrderType.valueOf(orderTypeStr));
             }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+            
+            String orderStatusStr = rs.getString("order_status");
+            if (orderStatusStr != null) {
+                order.setOrderStatus(OrderStatus.valueOf(orderStatusStr));
+            }
+            
+            order.setDishOrderList(findDishOrdersByOrderId(orderId));
         }
 
-        return order;
+    } catch (SQLException e) {
+        e.printStackTrace();
     }
 
+    return order;
+}
     private List<DishOrder> findDishOrdersByOrderId(int orderId) {
         List<DishOrder> list = new ArrayList<>();
         String sql = "SELECT id, id_dish, quantity FROM dish_order WHERE id_order = ?";
